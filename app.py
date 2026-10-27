@@ -5,6 +5,7 @@ from typing import List, Dict
 import streamlit as st
 import pymupdf
 from dotenv import load_dotenv
+from streamlit.errors import StreamlitSecretNotFoundError
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 
@@ -15,6 +16,16 @@ DATA_DIR = Path("data")
 DATA_DIR.mkdir(exist_ok=True)
 
 st.set_page_config(page_title=APP_TITLE, page_icon="📑", layout="wide")
+
+
+def get_setting(name: str, default: str = "") -> str:
+    value = os.getenv(name)
+    if value:
+        return value
+    try:
+        return st.secrets.get(name, default)
+    except StreamlitSecretNotFoundError:
+        return default
 
 
 def extract_pdf(file_bytes: bytes, filename: str) -> List[Dict]:
@@ -61,14 +72,14 @@ def retrieve(query: str, chunks: List[Dict], k: int = 5):
 
 
 def gemini_generate(prompt: str) -> str:
-    key = os.getenv("GEMINI_API_KEY")
+    key = get_setting("GEMINI_API_KEY")
     if not key:
         return ""
     try:
         from google import genai
         client = genai.Client(api_key=key)
         response = client.models.generate_content(
-            model=os.getenv("GEMINI_MODEL", "gemini-3.8-flash"),
+            model=get_setting("GEMINI_MODEL", "gemini-3.8-flash"),
             contents=prompt,
         )
         return response.text or ""
@@ -141,7 +152,7 @@ st.caption("Regulatory Circular Intelligence • PDF → Retrieval → Grounded 
 
 with st.sidebar:
     st.header("Configuration")
-    api_present = bool(os.getenv("GEMINI_API_KEY"))
+    api_present = bool(get_setting("GEMINI_API_KEY"))
     st.success("Gemini API connected") if api_present else st.info("Demo mode: no Gemini API key")
     top_k = st.slider("Retrieved passages", 3, 8, 5)
     chunk_words = st.slider("Chunk size (words)", 100, 300, 180, 20)
